@@ -21,7 +21,7 @@ object ALSTrainer {
   def main(args: Array[String]): Unit = {
     val config = Map(
       "spark.cores" -> "local[*]",
-      "mongo.uri" -> "mongodb://localhost:27017/recommender",
+      "mongo.uri" -> "mongodb://192.168.56.104:27017/recommender",
       "mongo.db" -> "recommender"
     )
 
@@ -50,7 +50,7 @@ object ALSTrainer {
     val trainingRDD = splits(0)
     val testRDD = splits(1)
 
-    // 模型参数选择，输出最优参数
+    // 模型参数选择，输出最优参数：(300,0.1,0.9258519949434699)
     adjustALSParam(trainingRDD, testRDD)
 
     spark.close()
@@ -76,7 +76,7 @@ object ALSTrainer {
     // 以uid，mid作为外键，inner join实际观测值和预测值
     val observed = data.map( item => ( (item.user, item.product), item.rating ) )
     val predict = predictRating.map( item => ( (item.user, item.product), item.rating ) )
-    // 内连接得到(uid, mid),(actual, predict)
+    // 内连接得到(uid, mid)：(actual实际评分, predict预测评分)
     sqrt(
       observed.join(predict).map{
         case ( (uid, mid), (actual, pre) ) =>

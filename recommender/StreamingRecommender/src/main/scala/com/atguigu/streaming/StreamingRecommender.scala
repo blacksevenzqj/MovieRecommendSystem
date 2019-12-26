@@ -22,8 +22,8 @@ import redis.clients.jedis.Jedis
 
 // 定义连接助手对象，序列化
 object ConnHelper extends Serializable{
-  lazy val jedis = new Jedis("localhost")
-  lazy val mongoClient = MongoClient( MongoClientURI("mongodb://localhost:27017/recommender") )
+  lazy val jedis = new Jedis("192.168.56.104", 6379)
+  lazy val mongoClient = MongoClient( MongoClientURI("mongodb://192.168.56.104:27017/recommender") )
 }
 
 case class MongoConfig(uri:String, db:String)
@@ -48,7 +48,7 @@ object StreamingRecommender {
   def main(args: Array[String]): Unit = {
     val config = Map(
       "spark.cores" -> "local[*]",
-      "mongo.uri" -> "mongodb://localhost:27017/recommender",
+      "mongo.uri" -> "mongodb://192.168.56.104:27017/recommender",
       "mongo.db" -> "recommender",
       "kafka.topic" -> "recommender"
     )
@@ -82,7 +82,7 @@ object StreamingRecommender {
 
     // 定义kafka连接参数
     val kafkaParam = Map(
-      "bootstrap.servers" -> "localhost:9092",
+      "bootstrap.servers" -> "192.168.56.104:9092",
       "key.deserializer" -> classOf[StringDeserializer],
       "value.deserializer" -> classOf[StringDeserializer],
       "group.id" -> "recommender",
@@ -94,7 +94,7 @@ object StreamingRecommender {
       ConsumerStrategies.Subscribe[String, String]( Array(config("kafka.topic")), kafkaParam )
     )
 
-    // 把原始数据UID|MID|SCORE|TIMESTAMP 转换成评分流
+    // 把原始数据 uid|mid|score|timestamp 转换成评分流
     val ratingStream = kafkaStream.map{
       msg =>
         val attr = msg.value().split("\\|")
@@ -130,9 +130,10 @@ object StreamingRecommender {
 
   }
 
+
   // redis操作返回的是java类，为了用map操作需要引入转换类
   import scala.collection.JavaConversions._
-
+  // 从redis里获取当前用户最近的K次评分，保存成Array[(mid, score)]
   def getUserRecentlyRating(num: Int, uid: Int, jedis: Jedis): Array[(Int, Double)] = {
     // 从redis读取数据，用户评分数据保存在 uid:UID 为key的队列里，value是 MID:SCORE
     jedis.lrange("uid:" + uid, 0, num-1)
@@ -144,6 +145,7 @@ object StreamingRecommender {
       .toArray
   }
 
+
   /**
     * 获取跟当前电影做相似的num个电影，作为备选电影
     * @param num       相似电影的数量
@@ -154,7 +156,7 @@ object StreamingRecommender {
     */
   def getTopSimMovies(num: Int, mid: Int, uid: Int, simMovies: scala.collection.Map[Int, scala.collection.immutable.Map[Int, Double]])
                      (implicit mongoConfig: MongoConfig): Array[Int] ={
-    // 1. 从相似度矩阵中拿到所有相似的电影
+    // 1. 从相似度矩阵中拿到所有相似的电影（转成的Array中是Map结构）
     val allSimMovies = simMovies(mid).toArray
 
     // 2. 从mongodb中查询用户已看过的电影
@@ -166,22 +168,24 @@ object StreamingRecommender {
       }
 
     // 3. 把看过的过滤，得到输出列表
-    allSimMovies.filter( x=> ! ratingExist.contains(x._1) )
-      .sortWith(_._2>_._2)
+    allSimMovies.filter( x => ! ratingExist.contains(x._1) )
+      .sortWith(_._2 > _._2)
       .take(num)
-      .map(x=>x._1)
+      .map(x => x._1)
   }
+
 
   def computeMovieScores(candidateMovies: Array[Int],
                          userRecentlyRatings: Array[(Int, Double)],
                          simMovies: scala.collection.Map[Int, scala.collection.immutable.Map[Int, Double]]): Array[(Int, Double)] ={
     // 定义一个ArrayBuffer，用于保存每一个备选电影的基础得分
     val scores = scala.collection.mutable.ArrayBuffer[(Int, Double)]()
-    // 定义一个HashMap，保存每一个备选电影的增强减弱因子
+    // 定义一个HashMap，保存每一个备选电影的增强减弱因子（偏移项）
     val increMap = scala.collection.mutable.HashMap[Int, Int]()
     val decreMap = scala.collection.mutable.HashMap[Int, Int]()
 
-    for( candidateMovie <- candidateMovies; userRecentlyRating <- userRecentlyRatings){
+    // 一个备选电影 分别对应 当前用户已评分过的所有电影（1对多）
+    for( candidateMovie <- candidateMovies; userRecentlyRating <- userRecentlyRatings){ // 相当于 内外2层for循环
       // 拿到备选电影和最近评分电影的相似度
       val simScore = getMoviesSimScore( candidateMovie, userRecentlyRating._1, simMovies )
 
@@ -196,16 +200,18 @@ object StreamingRecommender {
       }
     }
     // 根据备选电影的mid做groupby，根据公式去求最后的推荐评分
+    // 数组的groupby(K)，点进去看源码返回类型为Map[K, Repr]（Repr为原数组的元素）
     scores.groupBy(_._1).map{
       // groupBy之后得到的数据 Map( mid -> ArrayBuffer[(mid, score)] )
-      case (mid, scoreList) =>
+      // 使用case抓到groupby返回的Map的数据：Map( mid -> ArrayBuffer[(mid, score)] )
+      case (mid, scoreList) => // scoreList 就是 ArrayBuffer[(mid, score)]
         ( mid, scoreList.map(_._2).sum / scoreList.length + log(increMap.getOrDefault(mid, 1)) - log(decreMap.getOrDefault(mid, 1)) )
-    }.toArray.sortWith(_._2>_._2)
+    }.toArray.sortWith(_._2 > _._2)
   }
 
   // 获取两个电影之间的相似度
-  def getMoviesSimScore(mid1: Int, mid2: Int, simMovies: scala.collection.Map[Int,
-    scala.collection.immutable.Map[Int, Double]]): Double ={
+  def getMoviesSimScore(mid1: Int, mid2: Int,
+                        simMovies: scala.collection.Map[Int, scala.collection.immutable.Map[Int, Double]]): Double ={
 
     simMovies.get(mid1) match {
       case Some(sims) => sims.get(mid2) match {
@@ -219,7 +225,7 @@ object StreamingRecommender {
   // 求一个数的对数，利用换底公式，底数默认为10
   def log(m: Int): Double ={
     val N = 10
-    math.log(m)/ math.log(N)
+    math.log(m) / math.log(N)
   }
 
   def saveDataToMongoDB(uid: Int, streamRecs: Array[(Int, Double)])(implicit mongoConfig: MongoConfig): Unit ={

@@ -42,7 +42,7 @@ object OfflineRecommender {
   def main(args: Array[String]): Unit = {
     val config = Map(
       "spark.cores" -> "local[*]",
-      "mongo.uri" -> "mongodb://localhost:27017/recommender",
+      "mongo.uri" -> "mongodb://192.168.56.104:27017/recommender",
       "mongo.db" -> "recommender"
     )
 
@@ -74,7 +74,8 @@ object OfflineRecommender {
     // 训练隐语义模型
     val trainData = ratingRDD.map( x => Rating(x._1, x._2, x._3) )
 
-    val (rank, iterations, lambda) = (200, 5, 0.1)
+    val (rank, iterations, lambda) = (300, 5, 0.1)
+    // rank：矩阵因子分解 隐特征向量维度；iterations：交替最小二乘迭代次数；lambda：正则化系数
     val model = ALS.train(trainData, rank, iterations, lambda)
 
     // 基于用户和电影的隐特征，计算预测评分，得到用户的推荐列表
@@ -100,6 +101,8 @@ object OfflineRecommender {
       .format("com.mongodb.spark.sql")
       .save()
 
+
+    // 二、电影相似度矩阵：
     // 基于电影隐特征，计算相似度矩阵，得到电影的相似度列表
     val movieFeatures = model.productFeatures.map{
       case (mid, features) => (mid, new DoubleMatrix(features))
@@ -108,21 +111,22 @@ object OfflineRecommender {
     // 对所有电影两两计算它们的相似度，先做笛卡尔积
     val movieRecs = movieFeatures.cartesian(movieFeatures)
       .filter{
-        // 把自己跟自己的配对过滤掉
+        // 把自己跟自己的配对过滤掉：a.mid != b.mid
         case (a, b) => a._1 != b._1
       }
       .map{
         case (a, b) => {
-          val simScore = this.consinSim(a._2, b._2)
+          val simScore = this.consinSim(a._2, b._2) // ._2即为new DoubleMatrix(features)
           ( a._1, ( b._1, simScore ) )
         }
       }
-      .filter(_._2._2 > 0.6)    // 过滤出相似度大于0.6的
+      .filter(_._2._2 > 0.6)    // 过滤出 相似度simScore 大于0.6的
       .groupByKey()
       .map{
         case (mid, items) => MovieRecs( mid, items.toList.sortWith(_._2 > _._2).map(x => Recommendation(x._1, x._2)) )
       }
       .toDF()
+
     movieRecs.write
       .option("uri", mongoConfig.uri)
       .option("collection", MOVIE_RECS)

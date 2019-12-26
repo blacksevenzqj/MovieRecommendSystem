@@ -44,7 +44,7 @@ object StatisticsRecommender {
   def main(args: Array[String]): Unit = {
     val config = Map(
       "spark.cores" -> "local[*]",
-      "mongo.uri" -> "mongodb://localhost:27017/recommender",
+      "mongo.uri" -> "mongodb://192.168.56.104:27017/recommender",
       "mongo.db" -> "recommender"
     )
 
@@ -87,7 +87,7 @@ object StatisticsRecommender {
     // 2. 近期热门统计，按照“yyyyMM”格式选取最近的评分数据，统计评分个数
     // 创建一个日期格式化工具
     val simpleDateFormat = new SimpleDateFormat("yyyyMM")
-    // 注册udf，把时间戳转换成年月格式
+    // 注册udf（用户自定义函数），把时间戳转换成年月格式
     spark.udf.register("changeDate", (x: Int)=>simpleDateFormat.format(new Date(x * 1000L)).toInt )
 
     // 对原始数据做预处理，去掉uid
@@ -96,12 +96,10 @@ object StatisticsRecommender {
 
     // 从ratingOfMonth中查找电影在各个月份的评分，mid，count，yearmonth
     val rateMoreRecentlyMoviesDF = spark.sql("select mid, count(mid) as count, yearmonth from ratingOfMonth group by yearmonth, mid order by yearmonth desc, count desc")
-
-    // 存入mongodb
-    storeDFInMongoDB(rateMoreRecentlyMoviesDF, RATE_MORE_RECENTLY_MOVIES)
+    storeDFInMongoDB(rateMoreRecentlyMoviesDF, RATE_MORE_RECENTLY_MOVIES) // 存入mongodb
 
     // 3. 优质电影统计，统计电影的平均评分，mid，avg
-    val averageMoviesDF = spark.sql("select mid, avg(score) as avg from ratings group by mid")
+    val averageMoviesDF = spark.sql("select mid, avg(score) as avg from ratings group by mid order by avg desc")
     storeDFInMongoDB(averageMoviesDF, AVERAGE_MOVIES)
 
     // 4. 各类别电影Top统计
@@ -109,7 +107,7 @@ object StatisticsRecommender {
     val genres = List("Action","Adventure","Animation","Comedy","Crime","Documentary","Drama","Family","Fantasy","Foreign","History","Horror","Music","Mystery"
       ,"Romance","Science","Tv","Thriller","War","Western")
 
-    // 把平均评分加入movie表里，加一列，inner join
+    // 把平均评分加入movie表里，加一列，inner join（有评分的电影才保留）
     val movieWithScore = movieDF.join(averageMoviesDF, "mid")
 
     // 为做笛卡尔积，把genres转成rdd
@@ -122,7 +120,7 @@ object StatisticsRecommender {
         case (genre, movieRow) => movieRow.getAs[String]("genres").toLowerCase.contains( genre.toLowerCase )
       }
       .map{
-        case (genre, movieRow) => ( genre, ( movieRow.getAs[Int]("mid"), movieRow.getAs[Double]("avg") ) )
+        case (genre, movieRow) => ( genre, ( movieRow.getAs[Int]("mid"), movieRow.getAs[Double]("avg") ) ) // 构造元组
       }
       .groupByKey()
       .map{

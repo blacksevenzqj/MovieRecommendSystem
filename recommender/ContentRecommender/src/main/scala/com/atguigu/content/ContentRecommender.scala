@@ -38,7 +38,7 @@ object ContentRecommender {
   def main(args: Array[String]): Unit = {
     val config = Map(
       "spark.cores" -> "local[*]",
-      "mongo.uri" -> "mongodb://localhost:27017/recommender",
+      "mongo.uri" -> "mongodb://192.168.56.104:27017/recommender",
       "mongo.db" -> "recommender"
     )
 
@@ -60,13 +60,13 @@ object ContentRecommender {
       .as[Movie]
       .map(
         // 提取mid，name，genres三项作为原始内容特征，分词器默认按照空格做分词
-        x => ( x.mid, x.name, x.genres.map(c=> if(c=='|') ' ' else c) )
+        x => ( x.mid, x.name, x.genres.map(c => if(c == '|') ' ' else c) )
       )
       .toDF("mid", "name", "genres")
       .cache()
 
-    // 核心部分： 用TF-IDF从内容信息中提取电影特征向量
 
+    // 核心部分： 用TF-IDF从内容信息中提取电影特征向量
     // 创建一个分词器，默认按空格分词
     val tokenizer = new Tokenizer().setInputCol("genres").setOutputCol("words")
 
@@ -76,6 +76,7 @@ object ContentRecommender {
     // 引入HashingTF工具，可以把一个词语序列转化成对应的词频
     val hashingTF = new HashingTF().setInputCol("words").setOutputCol("rawFeatures").setNumFeatures(50)
     val featurizedData = hashingTF.transform(wordsData)
+//    featurizedData.show(truncate = false)
 
     // 引入IDF工具，可以得到idf模型
     val idf = new IDF().setInputCol("rawFeatures").setOutputCol("features")
@@ -83,7 +84,6 @@ object ContentRecommender {
     val idfModel = idf.fit(featurizedData)
     // 用模型对原数据进行处理，得到文档中每个词的tf-idf，作为新的特征向量
     val rescaledData = idfModel.transform(featurizedData)
-
 //    rescaledData.show(truncate = false)
 
     val movieFeatures = rescaledData.map(

@@ -31,9 +31,10 @@ object HelloWorld {
 
     val as = List((1, "a"), (1, "b"), (1, "c"), (2, "d"), (2, "e"), (3, "g"))
     val bs = List((1, "a"), (1, "b"), (1, "c"), (2, "d"), (2, "e"), (3, "g"))
+    val cs = List((1, "a"), (1, "b"), (1, "c"), (2, "d"), (2, "e"), (3, "g"))
     // 相当于 内外2层for循环（笛卡尔积）
-    for( a <- as; b <- bs ){
-      println(a, b)
+    for( a <- as; b <- bs ; c <- cs){
+      println(a, b, c)
     }
 
   }

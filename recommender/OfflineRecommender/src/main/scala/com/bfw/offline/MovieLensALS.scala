@@ -31,14 +31,13 @@ object MovieLensALS {
       while(!valid){
         println(x._2+" :")
         try{
-//          val r = Console.readInt()
-          val r = scala.io.StdIn.readInt()
+          val r = scala.io.StdIn.readInt() // 控制台输入评分
           if (r>5 || r<0){
             println(prompt)
           } else {
             valid = true
             if (r>0){
-              rating = Some(Rating(0, x._1, r)) // 用户ID为0？
+              rating = Some(Rating(0, x._1, r)) // 控制台输入评分的用户ID默认设置为0
             }
           }
         } catch{
@@ -166,8 +165,9 @@ object MovieLensALS {
     //3.8 Make a personal recommendation
     val moviesId = myRatings.map(_.product)
     val candidates = sc.parallelize(movies.keys.filter(!moviesId.contains(_)).toSeq)
+    // 给控制台输入评分的用户推荐电影：
     val recommendations = bestModel.get
-                            .predict(candidates.map(x => (0, x))) // 用户ID为0？
+                            .predict(candidates.map(x => (0, x))) // 控制台输入评分的用户ID默认设置为0
                             .sortBy(-_.rating)
                             .take(50)
 

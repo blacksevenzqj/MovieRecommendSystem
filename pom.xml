@@ -50,6 +50,7 @@
             <version>${log4j.version}</version>
         </dependency>
     </dependencies>
+
     <build>
         <!--声明并引入子项目共有的插件-->
         <plugins>

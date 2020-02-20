@@ -18,6 +18,7 @@
         <module>StreamingRecommender</module>
         <module>ContentRecommender</module>
         <module>KafkaStream</module>
+        <module>MyLearnSpark</module>
     </modules>
 
     <dependencyManagement>

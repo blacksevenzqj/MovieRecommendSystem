@@ -1,4 +1,4 @@
-package com.zqj.SparkSQL.One2Six
+package com.zqj.SparkSQL.One2Six.oneVersion
 
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}

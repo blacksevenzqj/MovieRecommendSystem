@@ -1,6 +1,6 @@
-package com.zqj.SparkSQL
+package com.zqj.SparkSQL.One2Six.twoVersion
 
-import org.apache.spark.sql.{SparkSession}
+import org.apache.spark.sql.SparkSession
 
 /*
 spark-submit \

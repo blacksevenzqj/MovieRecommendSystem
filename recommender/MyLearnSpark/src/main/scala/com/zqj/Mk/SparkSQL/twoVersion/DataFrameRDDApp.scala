@@ -1,4 +1,4 @@
-package com.zqj.SparkSQL.One2Six.twoVersion
+package com.zqj.Mk.SparkSQL.twoVersion
 
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SparkSession}

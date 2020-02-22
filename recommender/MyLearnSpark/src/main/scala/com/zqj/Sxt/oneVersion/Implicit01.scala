@@ -1,5 +1,4 @@
-package com.zqj.Sxt
-
+package com.zqj.Sxt.oneVersion
 
 case class SpecialPerson(name: String)
 case class Older(name: String)

@@ -1,21 +1,22 @@
 package com.zqj.Sxt
 
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
 object WordCount {
 
   def main(args: Array[String]):Unit = {
-    val conf = new SparkConf().setMaster("local").setAppName("wc")
-    val sc = new SparkContext(conf)
+    val conf: SparkConf = new SparkConf().setMaster("local").setAppName("wc")
+    val sc: SparkContext = new SparkContext(conf)
 
-    val text = sc.textFile("file:///usr/local/my_soft/my_learn_code/my_learn_spark_code/MyLearnSpark/src/main/resources/data/test.txt")
-//    val text = sc.textFile("E:\\code\\python_workSpace\\idea_space\\lzy_spark_code\\src\\main\\pyspark\\First\\word.txt")
+//    val text: RDD[String] = sc.textFile("hdfs://hadoop104:9000/user/hadoop/word.txt") // HDFS
+//    val text: RDD[String] = sc.textFile("file:///usr/local/my_soft/my_learn_code/my_learn_spark_code/MyLearnSpark/word.txt")
+    val text = sc.textFile("E:\\code\\python_workSpace\\idea_space\\lzy_spark_code\\src\\main\\pyspark\\First\\word.txt")
 
-    val words = text.flatMap{ line => line.split(" ") }
-    val pairs = words.map( word => (word, 1))
-//    val results = pairs.reduceByKey(_+_)
-    val results = pairs.reduceByKey((a, b) => a + b)
-    val sorted = results.sortByKey(true)
+    val words: RDD[String] = text.flatMap{ line => line.split(" ") }
+    val pairs: RDD[(String, Int)] = words.map(word => (word, 1))
+    val results: RDD[(String, Int)] = pairs.reduceByKey((a, b) => a + b) // pairs.reduceByKey(_+_)
+    val sorted: RDD[(String, Int)] = results.sortByKey(true)
     sorted.foreach( x => println(x))
 
     println()
